@@ -39,13 +39,24 @@ st.markdown("""
         max-width: 98% !important;
     }
 
-    /* Outer Container Cards - High-Contrast Borders */
-    .dracula-card {
+    /* Target specific top-level elements to prevent ghost boxes */
+    div[data-testid="stColumn"] > div {
         background-color: var(--current-line);
         border-radius: 10px;
         padding: 16px 20px;
         margin-bottom: 12px;
         border: 2px solid var(--purple);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    /* Header Banner Styling */
+    .header-card {
+        background-color: var(--current-line);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+        border: 2px solid var(--purple);
+        border-left: 6px solid var(--purple) !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     }
 
@@ -77,7 +88,7 @@ st.markdown("""
         margin-bottom: 6px;
     }
 
-    /* Labels and Input Customization */
+    /* Labels and High-Contrast Inputs */
     label, .stSelectbox label, .stNumberInput label {
         color: #ff79c6 !important;
         font-weight: 700 !important;
@@ -126,7 +137,7 @@ st.markdown("""
 @st.cache_resource
 def load_model():
     try:
-        with open('House-Price-Prediction-RFR.pkl', 'rb') as f:
+        with open('model.pkl', 'rb') as f:
             return pickle.load(f), True
     except Exception:
         return None, False
@@ -139,7 +150,7 @@ else:
     feature_names = [
         'UNDER_CONSTRUCTION', 'RERA', 'BHK_NO.', 'SQUARE_FT', 'READY_TO_MOVE',
         'RESALE', 'LONGITUDE', 'LATITUDE', 'BHK_OR_RK_BHK', 'BHK_OR_RK_RK',
-        'ADDRESS_Gandhi Chowk,Bhandara', 'ADDRESS_panvel,Mumbai', 'ADDRESS_Manoramaganj,Indore'
+        'ADDRESS_100 Feet Road,Anand', 'ADDRESS_Gandhi Chowk,Bhandara', 'ADDRESS_panvel,Mumbai'
     ]
 
 BINARY_MAP = {"No": 0, "Yes": 1}
@@ -147,7 +158,7 @@ BINARY_MAP = {"No": 0, "Yes": 1}
 address_features = [f for f in feature_names if f.startswith("ADDRESS_")]
 locations = [f.replace("ADDRESS_", "") for f in address_features]
 if not locations:
-    locations = ["Gandhi Chowk,Bhandara", "panvel,Mumbai", "Manoramaganj,Indore"]
+    locations = ["100 Feet Road,Anand", "Gandhi Chowk,Bhandara", "panvel,Mumbai"]
 
 if 'prediction_val' not in st.session_state:
     st.session_state['prediction_val'] = 0.0
@@ -156,9 +167,9 @@ if 'prediction_val' not in st.session_state:
 # UI Layout Architecture
 # ---------------------------------------------------------
 
-# Header
+# Header Banner
 st.markdown("""
-<div class="dracula-card" style="border-left: 6px solid #bd93f9;">
+<div class="header-card">
     <h2 style="color: #ffffff; margin:0; padding:0; font-size: 24px; font-weight:700;">🏡 Real Estate Price Predictor</h2>
     <p style="color: #8be9fd; margin:0; font-size: 13px; font-weight: 500;">RandomForestRegressor Machine Learning Model</p>
 </div>
@@ -168,15 +179,23 @@ col_left, col_right = st.columns([1.1, 1.9], gap="small")
 
 # --- Left Column: Inputs ---
 with col_left:
-    st.markdown('<div class="dracula-card">', unsafe_allow_html=True)
     st.markdown('<p class="metric-title">Property Specifications</p>', unsafe_allow_html=True)
     
-    square_ft = st.number_input("Area in Sq. Ft (SQUARE_FT)", min_value=100, max_value=50000, value=1000, step=50)
-    bhk_no = st.selectbox("Number of BHK (BHK_NO.)", options=[1, 2, 3, 4, 5, 6], index=3)
+    square_ft = st.number_input("Area in Sq. Ft (SQUARE_FT)", min_value=100, max_value=50000, value=1250, step=50)
+    bhk_no = st.selectbox("Number of Rooms / BHK Count", options=[1, 2, 3, 4, 5, 6], index=1)
     selected_location = st.selectbox("Property Location", options=locations)
 
-    # Mutually Exclusive Property Status Selection
-    construction_status = st.selectbox("Construction Status", ["Ready to Move", "Under Construction"], index=0)
+    # Mutually Exclusive Layout Type (BHK vs RK)
+    layout_type = st.selectbox("Property Layout Type", ["BHK (Bedroom, Hall, Kitchen)", "RK (Room, Kitchen)"], index=0)
+    if layout_type.startswith("BHK"):
+        bhk_or_rk_bhk = 1
+        bhk_or_rk_rk = 0
+    else:
+        bhk_or_rk_bhk = 0
+        bhk_or_rk_rk = 1
+
+    # Mutually Exclusive Construction Status
+    construction_status = st.selectbox("Construction Status", ["Under Construction", "Ready to Move"], index=0)
     if construction_status == "Under Construction":
         under_construction = 1
         ready_to_move = 0
@@ -187,14 +206,10 @@ with col_left:
     c1, c2 = st.columns(2)
     with c1:
         rera = BINARY_MAP[st.selectbox("RERA Approved", ["No", "Yes"], index=1)]
-        bhk_or_rk_bhk = BINARY_MAP[st.selectbox("Type: BHK", ["No", "Yes"], index=1)]
-
     with c2:
         resale = BINARY_MAP[st.selectbox("Resale Property", ["No", "Yes"], index=0)]
-        bhk_or_rk_rk = BINARY_MAP[st.selectbox("Type: RK", ["No", "Yes"], index=0)]
 
     predict_btn = st.button("🚀 Estimate Valuation")
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # --- Compute Prediction Action ---
 if predict_btn:
@@ -209,8 +224,8 @@ if predict_btn:
     input_dict['BHK_OR_RK_RK'] = bhk_or_rk_rk
     
     # Preserved Background Coordinates
-    input_dict['LATITUDE'] = 21.1667
-    input_dict['LONGITUDE'] = 79.6500
+    input_dict['LATITUDE'] = 22.5726
+    input_dict['LONGITUDE'] = 88.3639
 
     loc_feature_key = f"ADDRESS_{selected_location}"
     if loc_feature_key in input_dict:
@@ -225,36 +240,38 @@ if predict_btn:
 
 # --- Right Column: Outputs ---
 with col_right:
-    # Model Specs Section (Cleaned up titles & R² added)
+    # Model Specs Section
     st.markdown("""
-    <div class="dracula-card">
         <p class="metric-title">Model Architecture Specs</p>
         <span class="stat-pill">Algorithm: RandomForestRegressor</span>
         <span class="stat-pill">Model Status: <span style="color: #50fa7b;">Active</span></span>
         <span class="stat-pill">Model R²: <span style="color: #f1fa8c;">94.91%</span></span>
-    </div>
     """, unsafe_allow_html=True)
 
-    # Valuation Output Box
+    # Valuation Display Box
     val = st.session_state['prediction_val']
     st.markdown(f"""
-    <div class="dracula-card" style="border: 2px solid #50fa7b; text-align: center;">
-        <p class="metric-title" style="color: #50fa7b !important;">Estimated Property Price</p>
-        <div class="metric-value" style="font-size: 38px; color: #f1fa8c;">
+        <p class="metric-title" style="color: #50fa7b !important; text-align: center;">Estimated Property Price</p>
+        <div class="metric-value" style="font-size: 38px; color: #f1fa8c; text-align: center;">
             ₹ {val:,.2f} Lakhs
         </div>
-    </div>
     """, unsafe_allow_html=True)
 
     # Feature Overview Table
-    st.markdown('<div class="dracula-card">', unsafe_allow_html=True)
     st.markdown('<p class="metric-title">Selected Parameter Overview</p>', unsafe_allow_html=True)
     
     summary_df = pd.DataFrame({
-        "Feature Parameter": ["Area", "Location", "BHK Count", "Under Construction", "Ready to Move", "RERA Approved", "Resale"],
-        "Input Value": [f"{square_ft} sqft", selected_location, f"{bhk_no} BHK", "Yes" if under_construction else "No", "Yes" if ready_to_move else "No", "Yes" if rera else "No", "Yes" if resale else "No"],
+        "Feature Parameter": ["Area", "Location", "BHK Count", "Layout Type", "Construction Status", "RERA Approved", "Resale"],
+        "Input Value": [
+            f"{square_ft} sqft", 
+            selected_location, 
+            f"{bhk_no}", 
+            "BHK" if bhk_or_rk_bhk else "RK",
+            "Under Construction" if under_construction else "Ready to Move", 
+            "Yes" if rera else "No", 
+            "Yes" if resale else "No"
+        ],
         "Encoding": ["Numeric", "One-Hot Encoded", "Numeric", "Binary (0/1)", "Binary (0/1)", "Binary (0/1)", "Binary (0/1)"]
     })
     
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
-    st.markdown('</div>', unsafe_allow_html=True)
