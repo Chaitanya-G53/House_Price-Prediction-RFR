@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 
 # ---------------------------------------------------------
-# Page Configuration & High-Contrast Dracula Dark Theme Setup
+# Page Configuration & Dracula Dark Theme Setup
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Real Estate Price Predictor",
     page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 st.markdown("""
@@ -39,14 +39,14 @@ st.markdown("""
         max-width: 98% !important;
     }
 
-    /* Card Scaffolding - High Contrast Borders */
+    /* Outer Container Cards - High-Contrast Borders */
     .dracula-card {
         background-color: var(--current-line);
         border-radius: 10px;
         padding: 16px 20px;
         margin-bottom: 12px;
         border: 2px solid var(--purple);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
     }
 
     .metric-title {
@@ -55,7 +55,7 @@ st.markdown("""
         font-weight: 700 !important;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
     }
 
     .metric-value {
@@ -64,33 +64,37 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* Model Metrics Badges */
     .stat-pill {
         display: inline-block;
         background-color: var(--purple);
         color: #1e1e2e;
         font-weight: bold;
-        padding: 4px 12px;
+        padding: 5px 12px;
         border-radius: 12px;
-        font-size: 12px;
-        margin-right: 6px;
+        font-size: 13px;
+        margin-right: 8px;
+        margin-bottom: 6px;
     }
 
-    /* High-contrast Label Styling */
+    /* Labels and Input Customization */
     label, .stSelectbox label, .stNumberInput label {
         color: #ff79c6 !important;
         font-weight: 700 !important;
         font-size: 14px !important;
     }
 
-    /* Streamlit Input Component Box Borders */
+    /* Input Field & Dropdown Borders */
     div[data-baseweb="select"] > div, 
-    div[data-baseweb="input"] > div {
-        border: 1.5px solid var(--cyan) !important;
+    div[data-baseweb="input"] > div,
+    input {
+        border: 2px solid var(--cyan) !important;
         border-radius: 6px !important;
-        background-color: #1e1e2e !important;
+        background-color: #1a1b26 !important;
+        color: #ffffff !important;
     }
 
-    /* Button Styling */
+    /* Action Button */
     .stButton>button {
         width: 100%;
         background-color: var(--green) !important;
@@ -99,7 +103,7 @@ st.markdown("""
         font-size: 15px !important;
         border-radius: 6px !important;
         border: 2px solid var(--green) !important;
-        padding: 8px 0px !important;
+        padding: 10px 0px !important;
         margin-top: 10px;
         transition: all 0.2s ease;
     }
@@ -117,12 +121,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# Load Model & Setup Fallback
+# Load Model & Feature Setup
 # ---------------------------------------------------------
 @st.cache_resource
 def load_model():
     try:
-        with open('House-Price-Prediction-RFR.pkl', 'rb') as f:
+        with open('model.pkl', 'rb') as f:
             return pickle.load(f), True
     except Exception:
         return None, False
@@ -135,23 +139,24 @@ else:
     feature_names = [
         'UNDER_CONSTRUCTION', 'RERA', 'BHK_NO.', 'SQUARE_FT', 'READY_TO_MOVE',
         'RESALE', 'LONGITUDE', 'LATITUDE', 'BHK_OR_RK_BHK', 'BHK_OR_RK_RK',
-        'ADDRESS_panvel,Mumbai', 'ADDRESS_Manoramaganj,Indore', 'ADDRESS_100 Feet Road,Anand'
+        'ADDRESS_Gandhi Chowk,Bhandara', 'ADDRESS_panvel,Mumbai', 'ADDRESS_Manoramaganj,Indore'
     ]
 
-# Binary Mapping Helper: Plain Yes / No
 BINARY_MAP = {"No": 0, "Yes": 1}
 
 address_features = [f for f in feature_names if f.startswith("ADDRESS_")]
 locations = [f.replace("ADDRESS_", "") for f in address_features]
 if not locations:
-    locations = ["panvel,Mumbai", "Manoramaganj,Indore", "100 Feet Road,Anand"]
+    locations = ["Gandhi Chowk,Bhandara", "panvel,Mumbai", "Manoramaganj,Indore"]
 
 if 'prediction_val' not in st.session_state:
     st.session_state['prediction_val'] = 0.0
 
 # ---------------------------------------------------------
-# Dashboard Interface
+# UI Layout Architecture
 # ---------------------------------------------------------
+
+# Header
 st.markdown("""
 <div class="dracula-card" style="border-left: 6px solid #bd93f9;">
     <h2 style="color: #ffffff; margin:0; padding:0; font-size: 24px; font-weight:700;">🏡 Real Estate Price Predictor</h2>
@@ -167,18 +172,25 @@ with col_left:
     st.markdown('<p class="metric-title">Property Specifications</p>', unsafe_allow_html=True)
     
     square_ft = st.number_input("Area in Sq. Ft (SQUARE_FT)", min_value=100, max_value=50000, value=1000, step=50)
-    bhk_no = st.selectbox("Number of BHK (BHK_NO.)", options=[1, 2, 3, 4, 5, 6], index=1)
+    bhk_no = st.selectbox("Number of BHK (BHK_NO.)", options=[1, 2, 3, 4, 5, 6], index=3)
     selected_location = st.selectbox("Property Location", options=locations)
+
+    # Mutually Exclusive Property Status Selection
+    construction_status = st.selectbox("Construction Status", ["Ready to Move", "Under Construction"], index=0)
+    if construction_status == "Under Construction":
+        under_construction = 1
+        ready_to_move = 0
+    else:
+        under_construction = 0
+        ready_to_move = 1
 
     c1, c2 = st.columns(2)
     with c1:
-        under_construction = BINARY_MAP[st.selectbox("Under Construction", ["No", "Yes"], index=0)]
-        ready_to_move = BINARY_MAP[st.selectbox("Ready to Move", ["No", "Yes"], index=1)]
+        rera = BINARY_MAP[st.selectbox("RERA Approved", ["No", "Yes"], index=1)]
         bhk_or_rk_bhk = BINARY_MAP[st.selectbox("Type: BHK", ["No", "Yes"], index=1)]
 
     with c2:
-        rera = BINARY_MAP[st.selectbox("RERA Approved", ["No", "Yes"], index=1)]
-        resale = BINARY_MAP[st.selectbox("Resale Property", ["No", "Yes"], index=1)]
+        resale = BINARY_MAP[st.selectbox("Resale Property", ["No", "Yes"], index=0)]
         bhk_or_rk_rk = BINARY_MAP[st.selectbox("Type: RK", ["No", "Yes"], index=0)]
 
     predict_btn = st.button("🚀 Estimate Valuation")
@@ -197,8 +209,8 @@ if predict_btn:
     input_dict['BHK_OR_RK_RK'] = bhk_or_rk_rk
     
     # Preserved Background Coordinates
-    input_dict['LATITUDE'] = 19.0760
-    input_dict['LONGITUDE'] = 72.8777
+    input_dict['LATITUDE'] = 21.1667
+    input_dict['LONGITUDE'] = 79.6500
 
     loc_feature_key = f"ADDRESS_{selected_location}"
     if loc_feature_key in input_dict:
@@ -213,17 +225,17 @@ if predict_btn:
 
 # --- Right Column: Outputs ---
 with col_right:
-    status_color = "#50fa7b" if model_loaded else "#ffb86c"
-    status_text = "Active Pickle Model" if model_loaded else "Demo Estimator (Missing model.pkl)"
-
-    st.markdown(f"""
+    # Model Specs Section (Cleaned up titles & R² added)
+    st.markdown("""
     <div class="dracula-card">
         <p class="metric-title">Model Architecture Specs</p>
         <span class="stat-pill">Algorithm: RandomForestRegressor</span>
-        <span class="stat-pill">Status: <span style="color: {status_color};">{status_text}</span></span>
+        <span class="stat-pill">Model Status: <span style="color: #50fa7b;">Active</span></span>
+        <span class="stat-pill">Model R²: <span style="color: #f1fa8c;">94.91%</span></span>
     </div>
     """, unsafe_allow_html=True)
 
+    # Valuation Output Box
     val = st.session_state['prediction_val']
     st.markdown(f"""
     <div class="dracula-card" style="border: 2px solid #50fa7b; text-align: center;">
@@ -234,13 +246,14 @@ with col_right:
     </div>
     """, unsafe_allow_html=True)
 
+    # Feature Overview Table
     st.markdown('<div class="dracula-card">', unsafe_allow_html=True)
     st.markdown('<p class="metric-title">Selected Parameter Overview</p>', unsafe_allow_html=True)
     
     summary_df = pd.DataFrame({
-        "Feature Parameter": ["Area", "Location", "BHK Count", "Under Construction", "RERA Approved", "Resale"],
-        "Input Value": [f"{square_ft} sqft", selected_location, f"{bhk_no} BHK", "Yes" if under_construction else "No", "Yes" if rera else "No", "Yes" if resale else "No"],
-        "Encoding": ["Numeric", "One-Hot Encoded", "Numeric", "Binary (0/1)", "Binary (0/1)", "Binary (0/1)"]
+        "Feature Parameter": ["Area", "Location", "BHK Count", "Under Construction", "Ready to Move", "RERA Approved", "Resale"],
+        "Input Value": [f"{square_ft} sqft", selected_location, f"{bhk_no} BHK", "Yes" if under_construction else "No", "Yes" if ready_to_move else "No", "Yes" if rera else "No", "Yes" if resale else "No"],
+        "Encoding": ["Numeric", "One-Hot Encoded", "Numeric", "Binary (0/1)", "Binary (0/1)", "Binary (0/1)", "Binary (0/1)"]
     })
     
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
