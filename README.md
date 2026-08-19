@@ -194,17 +194,7 @@ The prediction should be treated as a **machine-learning estimate**, not as a ve
 - Add prediction intervals or uncertainty estimates
 - Deploy the model with Flask or Streamlit
 
-## 📁 Project Structure
-
-```text
-Indian-House-Price-Prediction/
-│
-├── Indian_House_Prediction.ipynb
-├── House-Price-Prediction-RFR.pkl
-├── README.md
-└── app.py                  # Optional deployment application
 ```
-
 ## 👨‍💻 Skills Demonstrated
 
 - Data Cleaning
@@ -223,4 +213,4 @@ Indian-House-Price-Prediction/
 
 The final Random Forest model achieved a **94.91% R² score on the test set**, demonstrating strong predictive performance on the current dataset and test split.
 
-If you found this project useful, consider giving the repository a ⭐.
+#If you found this project useful, consider giving the repository a ⭐.
