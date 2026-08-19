@@ -103,29 +103,39 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# Load Model & Prepare Features
+# Load Model & Setup Fallback
 # ---------------------------------------------------------
 @st.cache_resource
 def load_model():
-    with open('model.pkl', 'rb') as f:
-        return pickle.load(f)
+    try:
+        with open('model.pkl', 'rb') as f:
+            return pickle.load(f), True
+    except Exception:
+        return None, False
 
-try:
-    model = load_model()
+model, model_loaded = load_model()
+
+# Extract feature names if model exists; otherwise load defaults
+if model_loaded and hasattr(model, "feature_names_in_"):
     feature_names = list(model.feature_names_in_)
-except Exception:
+else:
     feature_names = [
         'UNDER_CONSTRUCTION', 'RERA', 'BHK_NO.', 'SQUARE_FT', 'READY_TO_MOVE',
         'RESALE', 'LONGITUDE', 'LATITUDE', 'BHK_OR_RK_BHK', 'BHK_OR_RK_RK',
-        'ADDRESS_, panvel,Mumbai', 'ADDRESS_,Manoramaganj,Indore', 'ADDRESS_100 Feet Road,Anand'
+        'ADDRESS_panvel,Mumbai', 'ADDRESS_Manoramaganj,Indore', 'ADDRESS_100 Feet Road,Anand'
     ]
-    model = None
 
-# Binary Mapping Helper: UI Label -> Integer Value
+# Mapping UI labels to numbers
 BINARY_MAP = {"No (0)": 0, "Yes (1)": 1}
 
 address_features = [f for f in feature_names if f.startswith("ADDRESS_")]
 locations = [f.replace("ADDRESS_", "") for f in address_features]
+if not locations:
+    locations = ["panvel,Mumbai", "Manoramaganj,Indore", "100 Feet Road,Anand"]
+
+# Initialize Session State for Active Prediction Value
+if 'prediction_val' not in st.session_state:
+    st.session_state['prediction_val'] = 0.0
 
 # ---------------------------------------------------------
 # Dashboard Interface
@@ -139,14 +149,14 @@ st.markdown("""
 
 col_left, col_right = st.columns([1.1, 1.9], gap="small")
 
-# --- Left Column: Streamlined Inputs ---
+# --- Left Column: Inputs ---
 with col_left:
     st.markdown('<div class="dracula-card">', unsafe_allow_html=True)
     st.markdown('<p class="metric-title" style="color:#ff79c6;">Property Specifications</p>', unsafe_allow_html=True)
     
     square_ft = st.number_input("Area in Sq. Ft (SQUARE_FT)", min_value=100, max_value=50000, value=1000, step=50)
     bhk_no = st.selectbox("Number of BHK (BHK_NO.)", options=[1, 2, 3, 4, 5, 6], index=1)
-    selected_location = st.selectbox("Property Location", options=locations if locations else ["Default Location"])
+    selected_location = st.selectbox("Property Location", options=locations)
 
     c1, c2 = st.columns(2)
     with c1:
@@ -162,52 +172,62 @@ with col_left:
     predict_btn = st.button("🚀 Estimate Valuation")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Right Column: Predictions & Model Factors ---
+# --- Compute Prediction Action ---
+if predict_btn:
+    # Build Input Payload
+    input_dict = {feat: 0 for feat in feature_names}
+    input_dict['SQUARE_FT'] = square_ft
+    input_dict['BHK_NO.'] = bhk_no
+    input_dict['UNDER_CONSTRUCTION'] = under_construction
+    input_dict['RERA'] = rera
+    input_dict['READY_TO_MOVE'] = ready_to_move
+    input_dict['RESALE'] = resale
+    input_dict['BHK_OR_RK_BHK'] = bhk_or_rk_bhk
+    input_dict['BHK_OR_RK_RK'] = bhk_or_rk_rk
+    
+    # Preserved Background Coordinates
+    input_dict['LATITUDE'] = 19.0760
+    input_dict['LONGITUDE'] = 72.8777
+
+    # One-Hot Location Setting
+    loc_feature_key = f"ADDRESS_{selected_location}"
+    if loc_feature_key in input_dict:
+        input_dict[loc_feature_key] = 1
+
+    # Execute Prediction
+    if model_loaded:
+        input_df = pd.DataFrame([input_dict])
+        st.session_state['prediction_val'] = float(model.predict(input_df)[0])
+    else:
+        # Robust Fallback Estimator Formula (Used if pickle is missing)
+        base_price = (square_ft * 0.05) + (bhk_no * 12.5) + (rera * 5.0) - (under_construction * 3.0)
+        st.session_state['prediction_val'] = max(10.0, base_price)
+
+# --- Right Column: Outputs ---
 with col_right:
+    status_color = "#50fa7b" if model_loaded else "#ffb86c"
+    status_text = "Active Pickle Model" if model_loaded else "Demo Estimator (Missing model.pkl)"
+
     st.markdown(f"""
     <div class="dracula-card">
         <p class="metric-title">Model Architecture Specs</p>
         <span class="stat-pill">Algorithm: RandomForestRegressor</span>
-        <span class="stat-pill">Estimators: 40 Trees</span>
-        <span class="stat-pill">Features: {len(feature_names)} Active</span>
+        <span class="stat-pill">Status: <span style="color: {status_color};">{status_text}</span></span>
     </div>
     """, unsafe_allow_html=True)
 
-    prediction_val = 0.0
-    if predict_btn and model is not None:
-        input_dict = {feat: 0 for feat in feature_names}
-        
-        # Binary & Numerical Inputs
-        input_dict['SQUARE_FT'] = square_ft
-        input_dict['BHK_NO.'] = bhk_no
-        input_dict['UNDER_CONSTRUCTION'] = under_construction
-        input_dict['RERA'] = rera
-        input_dict['READY_TO_MOVE'] = ready_to_move
-        input_dict['RESALE'] = resale
-        input_dict['BHK_OR_RK_BHK'] = bhk_or_rk_bhk
-        input_dict['BHK_OR_RK_RK'] = bhk_or_rk_rk
-
-        # Lat/Long preserved silently in background
-        input_dict['LATITUDE'] = 19.0760
-        input_dict['LONGITUDE'] = 72.8777
-
-        # Location Hot-Encoding
-        loc_feature_key = f"ADDRESS_{selected_location}"
-        if loc_feature_key in input_dict:
-            input_dict[loc_feature_key] = 1
-
-        input_df = pd.DataFrame([input_dict])
-        prediction_val = model.predict(input_df)[0]
-
+    # Price Prediction Display
+    val = st.session_state['prediction_val']
     st.markdown(f"""
     <div class="dracula-card" style="border: 1px solid #50fa7b; text-align: center;">
         <p class="metric-title" style="color: #50fa7b;">Estimated Property Price</p>
-        <div class="metric-value" style="font-size: 32px; color: #f1fa8c;">
-            ₹ {prediction_val:,.2f} Lakhs
+        <div class="metric-value" style="font-size: 36px; color: #f1fa8c;">
+            ₹ {val:,.2f} Lakhs
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # Feature Overview Table
     st.markdown('<div class="dracula-card">', unsafe_allow_html=True)
     st.markdown('<p class="metric-title">Selected Parameter Overview</p>', unsafe_allow_html=True)
     
