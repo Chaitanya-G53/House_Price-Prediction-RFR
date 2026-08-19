@@ -126,7 +126,7 @@ st.markdown("""
 @st.cache_resource
 def load_model():
     try:
-        with open('model.pkl', 'rb') as f:
+        with open('House-Price-Prediction-RFR.pkl', 'rb') as f:
             return pickle.load(f), True
     except Exception:
         return None, False
